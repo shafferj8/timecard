@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:intl/intl.dart';
 import 'package:shafferjeffreyTimesheet/common/SharedPref.dart';
 import 'package:shafferjeffreyTimesheet/common/worktime.dart';
 
@@ -10,7 +13,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   TimeClock timeClock = TimeClock(false, DateTime.now(), null);
-  Duration totalTime = Duration.zero;
   SharedPref sharedPref = SharedPref();
 
   @override
@@ -21,10 +23,19 @@ class _HomePageState extends State<HomePage> {
 
   //Loading counter value on start
   _loadCounter() async {
-    setState(() {
-      timeClock = TimeClock.fromJson(
-          sharedPref.read('timeSheet') as Map<String, dynamic>);
-    });
+    try {
+      TimeClock _timeClock = TimeClock.fromJson(
+          json.decode(await sharedPref.read('timeSheet')) as Map<String,
+              dynamic>);
+
+      setState(() {
+        timeClock = _timeClock;
+      });
+    } catch (Exception) {
+      Scaffold.of(context).showSnackBar(SnackBar(
+          content: new Text("Nothing found!"),
+          duration: const Duration(milliseconds: 500)));
+    }
   }
 
   @override
@@ -40,7 +51,7 @@ class _HomePageState extends State<HomePage> {
                     DateTime now = DateTime.now();
                     Duration duration = now.difference(timeClock.startTime);
                     PunchCycle punchCycle =
-                        PunchCycle(duration, timeClock.startTime, now);
+                    PunchCycle(duration, timeClock.startTime, now);
                     timeClock.timeCard.insert(0, punchCycle);
                     if (timeClock.timeCard.length > 10) {
                       timeClock.timeCard.removeLast();
@@ -65,7 +76,7 @@ class _HomePageState extends State<HomePage> {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: <Widget>[
           Divider(),
-          Text('Profile Details'),
+          Text(_getCurrentRunningText()),
           Container(
             // height: MediaQuery.of(context).size.height,
             child: Padding(
@@ -84,32 +95,79 @@ class _HomePageState extends State<HomePage> {
     return "1.2";
   }
 
+  String _getCurrentRunningText() {
+    String returnValue;
+    if (timeClock.isTracking) {
+      Duration totalTime = DateTime.now().difference(timeClock.startTime);
+
+      String formattedDate =
+      DateFormat('yyyy-MM-dd  kk:mm:ss').format(timeClock.startTime);
+
+      returnValue = "Started : " +
+          formattedDate +
+          ",  Current Running Time : " +
+          (totalTime.inHours +
+              (totalTime.inMinutes.remainder(Duration.minutesPerHour) /
+                  60.0))
+              .toString();
+    } else {
+      returnValue = "Not Currently Tracking Time";
+    }
+
+    return returnValue;
+  }
+
   List<TableRow> getTable() {
     List<TableRow> listOfTimeTable = new List<TableRow>();
 
-    listOfTimeTable.add(new TableRow(children: [
-      TableCell(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: <Widget>[
-            new Text('START'),
-            new Text(timeClock.startTime.toString()),
-          ],
+    for (int i = 0; i < timeClock.timeCard.length; i++) {
+      PunchCycle punchCycle = timeClock.timeCard[i];
+
+      listOfTimeTable.add(new TableRow(children: [
+        TableCell(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: <Widget>[
+              new Text('START'),
+              new Text(DateFormat('yyyy-MM-dd  kk:mm:ss')
+                  .format(punchCycle.startTime)),
+            ],
+          ),
         ),
-      )
-    ]));
+      ]));
+
+      listOfTimeTable.add(new TableRow(children: [
+        TableCell(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: <Widget>[
+              new Text('STOP'),
+              new Text(DateFormat('yyyy-MM-dd  kk:mm:ss')
+                  .format(punchCycle.stopTime)),
+            ],
+          ),
+        ),
+      ]));
+
+      Duration totalTime = punchCycle.stopTime.difference(punchCycle.startTime);
+
+      listOfTimeTable.add(new TableRow(children: [
+        TableCell(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: <Widget>[
+              new Text('DURATION'),
+              new Text((totalTime.inHours +
+                  (totalTime.inMinutes.remainder(Duration.minutesPerHour) /
+                      60.0))
+                  .toString()),
+            ],
+          ),
+        ),
+      ]));
+    }
 
     return listOfTimeTable;
-  }
-
-  String getText() {
-    if (timeClock.isTracking) {
-      return ("Started At : \n" + timeClock.startTime.toString());
-    } else {
-      return (totalTime.inHours +
-              (totalTime.inMinutes.remainder(Duration.minutesPerHour) / 60.0))
-          .toString();
-    }
   }
 
   Icon getIcon() {
